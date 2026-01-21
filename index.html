@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Statistics Web App</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<!-- ダークモードスイッチ -->
+<label class="switch">
+  <input type="checkbox" id="themeSwitch">
+  <span class="slider">
+    <span class="icon sun">☀️</span>
+    <span class="icon moon">🌙</span>
+  </span>
+</label>
+
+<div class="app">
+
+  <div class="card">
+    <h2>Statistics Calculator</h2>
+
+    <textarea id="input" placeholder="例: 1, 5, 3, 3, 9"></textarea>
+
+    <div class="controls">
+      <label>
+        <input type="radio" name="order" value="asc" checked>
+        小さい順
+      </label>
+      <label>
+        <input type="radio" name="order" value="desc">
+        大きい順
+      </label>
+
+      <label>
+        グラフ:
+        <select id="graphType">
+          <option value="bar">棒グラフ</option>
+          <option value="hist">ヒストグラム</option>
+        </select>
+      </label>
+    </div>
+
+    <button id="calcBtn">計算する</button>
+  </div>
+
+  <div class="card">
+    <h3>並び替え結果</h3>
+    <div id="sorted"></div>
+  </div>
+
+  <div class="card">
+    <h3>代表値</h3>
+    <div class="grid" id="stats"></div>
+  </div>
+
+  <div class="card">
+    <h3>グラフ</h3>
+    <canvas id="chart"></canvas>
+  </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
