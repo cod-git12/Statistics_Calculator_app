@@ -13,6 +13,10 @@ const { parseNumbers, computeStats, buildHistogram, formatNumber } = window.Stat
 // 最後に正しく計算できたデータ（グラフ種類・並び順の変更やリサイズで再描画するため）
 let lastNums = null;
 
+// 最後に表示した代表値（並び順・グラフ種類の変更では代表値は変わらないため、
+// 同じ内容ならカードを作り直さない。作り直すとフェードアニメーションが再発する）
+let lastStatsKey = null;
+
 // テーマ: 保存があればそれを、なければ OS の設定を初期値にする
 function applyTheme(dark) {
   document.body.classList.toggle("dark", dark);
@@ -39,13 +43,15 @@ themeSwitch.addEventListener("change", () => {
   }
 });
 
-calcBtn.addEventListener("click", () => calculate(false));
+calcBtn.addEventListener("click", () => calculate());
 
-// 並び順・グラフ種類の変更は、入力が正しく読める場合だけ静かに再表示する
+// 並び順・グラフ種類の変更も再計算として扱う。
+// 入力が無効・空の場合は、古い結果を残さずボタンを押したときと同じ扱いにする
+// （レビューで見つかった「古い結果が残る」問題への対応）。
 document.querySelectorAll('input[name="order"]').forEach((radio) => {
-  radio.addEventListener("change", () => calculate(true));
+  radio.addEventListener("change", () => calculate());
 });
-graphType.addEventListener("change", () => calculate(true));
+graphType.addEventListener("change", () => calculate());
 
 let resizeTimer = null;
 window.addEventListener("resize", () => {
@@ -68,28 +74,25 @@ function freqOf(nums) {
 function clearResults() {
   sorted.textContent = "";
   stats.innerHTML = "";
+  lastStatsKey = null;
   const ctx = chart.getContext("2d");
   ctx.clearRect(0, 0, chart.width, chart.height);
 }
 
-function calculate(silent) {
+function calculate() {
   const { values: nums, invalid } = parseNumbers(input.value);
 
   if (invalid.length) {
-    if (!silent) {
-      message.textContent = `数値として読めない入力があります: ${invalid.join(", ")}`;
-      clearResults();
-      lastNums = null;
-    }
+    message.textContent = `数値として読めない入力があります: ${invalid.join(", ")}`;
+    clearResults();
+    lastNums = null;
     return;
   }
 
   if (!nums.length) {
-    if (!silent) {
-      message.textContent = "数値を入力してください（例: 1, 5, 3, 3, 9）";
-      clearResults();
-      lastNums = null;
-    }
+    message.textContent = "数値を入力してください（例: 1, 5, 3, 3, 9）";
+    clearResults();
+    lastNums = null;
     return;
   }
 
@@ -103,8 +106,6 @@ function render(nums) {
   sorted.textContent = display.join(", ");
 
   // 代表値（丸めは表示だけに適用し、計算値そのものはそのまま使う）
-  stats.innerHTML = "";
-
   const result = computeStats(nums);
   const mode = result.mode.length ? result.mode.map(formatNumber).join(", ") : "なし";
 
@@ -118,13 +119,19 @@ function render(nums) {
     範囲: formatNumber(result.range)
   };
 
-  Object.entries(data).forEach(([k, v], i) => {
-    const d = document.createElement("div");
-    d.className = "stat";
-    d.style.animationDelay = `${i * 0.05}s`;
-    d.innerHTML = `<h3>${k}</h3><p>${v}</p>`;
-    stats.appendChild(d);
-  });
+  // 代表値が前回と同じならカードはそのままにする（アニメーション再発の防止）
+  const statsKey = JSON.stringify(data);
+  if (statsKey !== lastStatsKey) {
+    lastStatsKey = statsKey;
+    stats.innerHTML = "";
+    Object.entries(data).forEach(([k, v], i) => {
+      const d = document.createElement("div");
+      d.className = "stat";
+      d.style.animationDelay = `${i * 0.05}s`;
+      d.innerHTML = `<h3>${k}</h3><p>${v}</p>`;
+      stats.appendChild(d);
+    });
+  }
 
   drawGraph(display, freqOf(display));
 }
