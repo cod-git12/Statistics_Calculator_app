@@ -113,7 +113,32 @@ canvas{
   right:16px;
 }
 
-.switch input{ display:none }
+/* display:none にするとキーボードで操作できないため、透明にして重ねる */
+.switch input{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  margin:0;
+  opacity:0;
+  cursor:pointer;
+  z-index:2;
+}
+
+.switch input:focus-visible + .slider{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+
+#message{
+  color:#d64545;
+  margin:12px 0 0;
+  min-height:1em;
+}
+
+body.dark #message{
+  color:#ff8585;
+}
 
 .slider{
   width:64px;

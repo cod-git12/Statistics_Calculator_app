@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Statistics Web App</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -22,7 +23,7 @@
   <div class="card">
     <h2>Statistics Calculator</h2>
 
-    <textarea id="input" placeholder="例: 1, 5, 3, 3, 9"></textarea>
+    <textarea id="input" aria-label="数値入力（カンマ区切り）" placeholder="例: 1, 5, 3, 3, 9"></textarea>
 
     <div class="controls">
       <label>
@@ -44,6 +45,7 @@
     </div>
 
     <button id="calcBtn">計算する</button>
+    <p id="message" role="alert"></p>
   </div>
 
   <div class="card">
@@ -58,11 +60,12 @@
 
   <div class="card">
     <h3>グラフ</h3>
-    <canvas id="chart"></canvas>
+    <canvas id="chart" role="img" aria-label="計算結果のグラフ"></canvas>
   </div>
 
 </div>
 
+<script src="stats.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
