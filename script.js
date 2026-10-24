@@ -5,116 +5,187 @@ const chart = document.getElementById("chart");
 const graphType = document.getElementById("graphType");
 const calcBtn = document.getElementById("calcBtn");
 const themeSwitch = document.getElementById("themeSwitch");
+const message = document.getElementById("message");
+
+// stats.js の純粋関数（計算ロジック）
+const { parseNumbers, computeStats, buildHistogram, formatNumber } = window.Stats;
+
+// 最後に正しく計算できたデータ（グラフ種類・並び順の変更やリサイズで再描画するため）
+let lastNums = null;
+
+// テーマ: 保存があればそれを、なければ OS の設定を初期値にする
+function applyTheme(dark) {
+  document.body.classList.toggle("dark", dark);
+  themeSwitch.checked = dark;
+}
+
+try {
+  const savedTheme = localStorage.getItem("stats-theme");
+  if (savedTheme !== null) {
+    applyTheme(savedTheme === "dark");
+  } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    applyTheme(true);
+  }
+} catch (e) {
+  // 保存が使えない環境では従来通りライトモードのままにする
+}
 
 themeSwitch.addEventListener("change", () => {
-  document.body.classList.toggle("dark", themeSwitch.checked);
+  applyTheme(themeSwitch.checked);
+  try {
+    localStorage.setItem("stats-theme", themeSwitch.checked ? "dark" : "light");
+  } catch (e) {
+    // 保存できなくても切り替え自体は有効
+  }
 });
 
-calcBtn.addEventListener("click", calculate);
+calcBtn.addEventListener("click", () => calculate(false));
 
-function calculate(){
-  let nums = input.value
-    .split(",")
-    .map(v => Number(v.trim()))
-    .filter(v => !isNaN(v));
+// 並び順・グラフ種類の変更は、入力が正しく読める場合だけ静かに再表示する
+document.querySelectorAll('input[name="order"]').forEach((radio) => {
+  radio.addEventListener("change", () => calculate(true));
+});
+graphType.addEventListener("change", () => calculate(true));
 
-  if(!nums.length) return;
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  if (!lastNums) return;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => drawGraph(currentSorted(lastNums), freqOf(lastNums)), 200);
+});
 
+function currentSorted(nums) {
   const order = document.querySelector('input[name="order"]:checked').value;
-  nums.sort((a,b)=> order==="asc" ? a-b : b-a);
+  return [...nums].sort((a, b) => (order === "asc" ? a - b : b - a));
+}
 
-  sorted.textContent = nums.join(", ");
+function freqOf(nums) {
+  const freq = {};
+  nums.forEach((n) => (freq[n] = (freq[n] || 0) + 1));
+  return freq;
+}
 
-  // 代表値
+function clearResults() {
+  sorted.textContent = "";
+  stats.innerHTML = "";
+  const ctx = chart.getContext("2d");
+  ctx.clearRect(0, 0, chart.width, chart.height);
+}
+
+function calculate(silent) {
+  const { values: nums, invalid } = parseNumbers(input.value);
+
+  if (invalid.length) {
+    if (!silent) {
+      message.textContent = `数値として読めない入力があります: ${invalid.join(", ")}`;
+      clearResults();
+      lastNums = null;
+    }
+    return;
+  }
+
+  if (!nums.length) {
+    if (!silent) {
+      message.textContent = "数値を入力してください（例: 1, 5, 3, 3, 9）";
+      clearResults();
+      lastNums = null;
+    }
+    return;
+  }
+
+  message.textContent = "";
+  lastNums = nums;
+  render(nums);
+}
+
+function render(nums) {
+  const display = currentSorted(nums);
+  sorted.textContent = display.join(", ");
+
+  // 代表値（丸めは表示だけに適用し、計算値そのものはそのまま使う）
   stats.innerHTML = "";
 
-  const mean = nums.reduce((a,b)=>a+b,0)/nums.length;
-  const s = [...nums].sort((a,b)=>a-b);
-  const m = Math.floor(s.length/2);
-  const median = s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2;
-
-  const freq = {};
-  nums.forEach(n => freq[n] = (freq[n]||0) + 1);
-
-  const maxFreq = Math.max(...Object.values(freq));
-  const mode = maxFreq === 1 ? "なし"
-    : Object.keys(freq).filter(k => freq[k] === maxFreq).join(", ");
+  const result = computeStats(nums);
+  const mode = result.mode.length ? result.mode.map(formatNumber).join(", ") : "なし";
 
   const data = {
-    平均: mean,
-    中央値: median,
+    平均: formatNumber(result.mean),
+    中央値: formatNumber(result.median),
     最頻値: mode,
-    最小: Math.min(...nums),
-    最大: Math.max(...nums),
-    合計: nums.reduce((a,b)=>a+b,0),
-    範囲: Math.max(...nums) - Math.min(...nums)
+    最小: formatNumber(result.min),
+    最大: formatNumber(result.max),
+    合計: formatNumber(result.sum),
+    範囲: formatNumber(result.range)
   };
 
-  Object.entries(data).forEach(([k,v],i)=>{
+  Object.entries(data).forEach(([k, v], i) => {
     const d = document.createElement("div");
     d.className = "stat";
-    d.style.animationDelay = `${i*0.05}s`;
+    d.style.animationDelay = `${i * 0.05}s`;
     d.innerHTML = `<h3>${k}</h3><p>${v}</p>`;
     stats.appendChild(d);
   });
 
-  drawGraph(nums, freq);
+  drawGraph(display, freqOf(display));
 }
 
-function drawGraph(nums, freq){
+function drawGraph(nums, freq) {
   const ctx = chart.getContext("2d");
   chart.width = chart.offsetWidth;
   chart.height = 240;
 
-  ctx.clearRect(0,0,chart.width,chart.height);
+  ctx.clearRect(0, 0, chart.width, chart.height);
   ctx.font = "12px system-ui";
   ctx.textAlign = "center";
 
-  if(graphType.value === "bar"){
-    const keys = Object.keys(freq);
-    const max = Math.max(...Object.values(freq));
+  if (graphType.value === "bar") {
+    // 選択中の並び順のまま描く（重複を取り除いた順序をそのまま使う）
+    const keys = [...new Set(nums)];
+    const max = keys.reduce((m, k) => Math.max(m, freq[k]), 0);
     const w = chart.width / keys.length;
+    const showEvery = w >= 30 ? 1 : Math.ceil(30 / w);
 
-    keys.forEach((k,i)=>{
+    keys.forEach((k, i) => {
       const count = freq[k];
-      const h = (count / max) * (chart.height - 50);
+      const h = max ? (count / max) * (chart.height - 50) : 0;
+      const barWidth = w > 28 ? w - 24 : Math.max(1, w - 4);
 
       ctx.fillStyle = "#4f7cff";
-      ctx.fillRect(i*w + 12, chart.height - h - 30, w - 24, h);
+      ctx.fillRect(i * w + (w - barWidth) / 2, chart.height - h - 30, barWidth, h);
+
+      if (i % showEvery !== 0) return;
 
       // (1) みたいな表記
       ctx.fillStyle = "#888";
-      ctx.fillText(`(${count})`, i*w + w/2, chart.height - h - 38);
+      ctx.fillText(`(${count})`, i * w + w / 2, chart.height - h - 38);
 
-      ctx.fillText(k, i*w + w/2, chart.height - 12);
+      ctx.fillText(k, i * w + w / 2, chart.height - 12);
     });
 
-  }else{
+  } else {
     const bins = 5;
-    const min = Math.min(...nums);
-    const max = Math.max(...nums);
+    const min = nums.reduce((a, b) => Math.min(a, b), Infinity);
+    const max = nums.reduce((a, b) => Math.max(a, b), -Infinity);
     const step = (max - min) / bins;
 
-    const hist = Array(bins).fill(0);
-    nums.forEach(n=>{
-      let i = Math.min(bins-1, Math.floor((n - min) / step));
-      hist[i]++;
-    });
+    const hist = buildHistogram(nums, bins);
 
-    const maxH = Math.max(...hist);
+    const maxH = hist.reduce((a, b) => Math.max(a, b), 0);
     const w = chart.width / bins;
 
-    hist.forEach((v,i)=>{
-      const h = (v / maxH) * (chart.height - 50);
+    hist.forEach((v, i) => {
+      const h = maxH ? (v / maxH) * (chart.height - 50) : 0;
 
       ctx.fillStyle = "#7aa2ff";
-      ctx.fillRect(i*w + 12, chart.height - h - 30, w - 24, h);
+      ctx.fillRect(i * w + 12, chart.height - h - 30, w - 24, h);
 
       ctx.fillStyle = "#888";
-      ctx.fillText(v, i*w + w/2, chart.height - h - 38);
+      ctx.fillText(v, i * w + w / 2, chart.height - h - 38);
 
-      const label = `${(min + step*i).toFixed(1)}〜`;
-      ctx.fillText(label, i*w + w/2, chart.height - 12);
+      // 全値が同じ場合は階級が1つだけなので、ラベルも先頭だけに出す
+      if (step === 0 && i > 0) return;
+      const label = `${(min + step * i).toFixed(1)}〜`;
+      ctx.fillText(label, i * w + w / 2, chart.height - 12);
     });
   }
 }
